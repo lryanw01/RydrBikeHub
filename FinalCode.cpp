@@ -78,7 +78,7 @@ const float SPEED_MEDIUM = 25.0f;
 #define FEAT_COMPASS    1
 #define FEAT_SPEED      1
 #define FEAT_IMU        1
-#define FEAT_LCD        1
+#define FEAT_LCD        0  // Set to 1 to enable display
 #define FEAT_BT         1
 #define FEAT_GPS        1
 #define FEAT_HR         1
@@ -998,8 +998,10 @@ void updateFSM() {
 
     case Phase::RENDER:
       digitalWrite(IMU_CS_PIN, HIGH);  // Ensure IMU deselected for LCD
+      #if FEAT_LCD
       lv_timer_handler();
       ui_tick();
+      #endif
       break;
 
     case Phase::COMM:
@@ -1034,12 +1036,12 @@ void setup() {
   initSPI();
   
   initSpeedSensor();
-  initDisplay();
+//   initDisplay();
   
   // Initialize IMU after display (both share SPI)
   initIMU();
   
-  ui_init();
+//   ui_init();
   
   // Init BLE
   Serial.println("[INIT] Initializing BLE...");
@@ -1057,8 +1059,39 @@ void loop() {
   
   static uint32_t lastDebug = 0;
   if (runEvery(lastDebug, 5000)) {
-    Serial.printf("Loop: %lu | Speed: %s | Turn: %s | Lean: %s | HR: %d | Cell: %d | GPS: %s\n", 
-      app.loopCounter, telem.speed_str, telem.turn_angle_str, telem.tilt_str,
-      telem.bpm, telem.cellularConnected, telem.gps_coord_str);
+    Serial.println("\n========== DEBUG ==========");
+    Serial.printf("Loop: %lu\n", app.loopCounter);
+    
+    // Orientation (IMU)
+    Serial.println("[IMU]");
+    Serial.printf("  Turn: %s | Lean: %s\n", telem.turn_angle_str, telem.tilt_str);
+    
+    // Speed
+    Serial.println("[SPEED]");
+    Serial.printf("  Speed: %s (%.2f m/s) | MA Size: %d | Samples: %d\n", 
+      telem.speed_str, telem.speedMps, speedSensor.currentMASize, speedSensor.intervalCount);
+    
+    // GPS
+    Serial.println("[GPS]");
+    if (telem.gpsValid) {
+      Serial.printf("  Status: VALID | Lat: %.6f | Lon: %.6f\n", telem.latitude, telem.longitude);
+      Serial.printf("  https://maps.google.com/?q=%.6f,%.6f\n", telem.latitude, telem.longitude);
+    } else {
+      Serial.println("  Status: Searching...");
+    }
+    
+    // Cellular
+    Serial.println("[CELLULAR]");
+    Serial.printf("  Connected: %s | Signal: %d | Sending: %s\n", 
+      telem.cellularConnected ? "YES" : "NO", 
+      telem.signalQuality,
+      telem.cellularSending ? "YES" : "NO");
+      
+    Serial.println("[BLE HR]");
+    Serial.printf("  Connected: %s | BPM: %d\n", 
+      bleConnected ? "YES" : "NO",
+      telem.bpm);
+
+    Serial.println("===========================\n");
   }
 }
