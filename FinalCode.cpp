@@ -103,10 +103,6 @@ struct Telemetry {
   float turnDeg;
   double latitude;
   double longitude;
-  float gpsAltitude;
-  float gpsSpeed;
-  float gpsAccuracy;
-  int gpsSatellites;
   bool gpsValid;
   uint16_t bpm;
   bool charging;
@@ -578,10 +574,35 @@ bool readGps() {
     modem.sendAT("+CGNSINF");
     String response = "";
     if (modem.waitResponse(10000L, response) == 1) {
-      if (response.indexOf(",1,") != -1) {
-        telem.gpsValid = true;
-      } else {
+      int startIdx = response.indexOf(":") + 1;
+      if (startIdx > 0) {
+        String data = response.substring(startIdx);
+        data.trim();
+        
+        int fieldIdx = 0;
+        int lastComma = -1;
         telem.gpsValid = false;
+        
+        for (int i = 0; i <= (int)data.length(); i++) {
+          if (i == (int)data.length() || data.charAt(i) == ',') {
+            String field = data.substring(lastComma + 1, i);
+            field.trim();
+            
+            switch(fieldIdx) {
+              case 1:  // Fix status
+                telem.gpsValid = (field.toInt() == 1);
+                break;
+              case 3:  // Latitude
+                if (field.length() > 0) telem.latitude = field.toDouble();
+                break;
+              case 4:  // Longitude
+                if (field.length() > 0) telem.longitude = field.toDouble();
+                break;
+            }
+            lastComma = i;
+            fieldIdx++;
+          }
+        }
       }
     }
     sleepModem();
@@ -661,7 +682,8 @@ void processData() {
   snprintf(telem.speed_str, sizeof(telem.speed_str), "%.1f mph", speedMph);
   
   if (telem.gpsValid) {
-    snprintf(telem.gps_coord_str, sizeof(telem.gps_coord_str), "GPS Fix: Valid"); 
+    snprintf(telem.gps_coord_str, sizeof(telem.gps_coord_str), 
+             "%.6f, %.6f", telem.latitude, telem.longitude);
   } else {
     snprintf(telem.gps_coord_str, sizeof(telem.gps_coord_str), "Searching...");
   }
@@ -717,8 +739,19 @@ bool commCellular() {
     telem.cellularSending = true;
     
     String message = "EMERGENCY BUTTON TRIGGERED ON RYDR DEVICE\n\n";
-    message += "Speed: " + String(telem.speedMps * 2.237f, 1) + " mph\n";
-    message += "HR: " + String(telem.bpm) + " bpm\n";
+    
+    if (telem.gpsValid) {
+      message += "Location: " + String(telem.latitude, 6) + ", " + String(telem.longitude, 6) + "\n\n";
+      message += "Google Maps:\n";
+      message += "https://maps.google.com/?q=" + String(telem.latitude, 6) + "," + String(telem.longitude, 6);
+      
+      Serial.println("[EMERGENCY] GPS Coordinates:");
+      Serial.printf("  Lat: %.6f, Lon: %.6f\n", telem.latitude, telem.longitude);
+      Serial.printf("  https://maps.google.com/?q=%.6f,%.6f\n", telem.latitude, telem.longitude);
+    } else {
+      message += "Location: GPS not available";
+      Serial.println("[EMERGENCY] GPS not available");
+    }
     
     if (sendNtfyNotification("RYDR EMERGENCY ALERT", message, "urgent")) {
       telem.emergencySent = true;
@@ -1024,8 +1057,8 @@ void loop() {
   
   static uint32_t lastDebug = 0;
   if (runEvery(lastDebug, 5000)) {
-    Serial.printf("Loop: %lu | Speed: %s | Turn: %s | Lean: %s | HR: %d | Cell: %d\n", 
+    Serial.printf("Loop: %lu | Speed: %s | Turn: %s | Lean: %s | HR: %d | Cell: %d | GPS: %s\n", 
       app.loopCounter, telem.speed_str, telem.turn_angle_str, telem.tilt_str,
-      telem.bpm, telem.cellularConnected);
+      telem.bpm, telem.cellularConnected, telem.gps_coord_str);
   }
 }
