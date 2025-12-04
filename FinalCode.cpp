@@ -78,7 +78,7 @@ const float SPEED_MEDIUM = 25.0f;
 #define FEAT_COMPASS    1
 #define FEAT_SPEED      1
 #define FEAT_IMU        1
-#define FEAT_LCD        0  // Set to 1 to enable display
+#define FEAT_LCD        1  // Set to 1 to enable display
 #define FEAT_BT         1
 #define FEAT_GPS        1
 #define FEAT_HR         1
@@ -1036,12 +1036,12 @@ void setup() {
   initSPI();
   
   initSpeedSensor();
-//   initDisplay();
+  initDisplay();
   
   // Initialize IMU after display (both share SPI)
   initIMU();
   
-//   ui_init();
+  ui_init();
   
   // Init BLE
   Serial.println("[INIT] Initializing BLE...");
