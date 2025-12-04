@@ -573,35 +573,35 @@ bool readGps() {
     
     modem.sendAT("+CGNSINF");
     String response = "";
+    
     if (modem.waitResponse(10000L, response) == 1) {
-      int startIdx = response.indexOf(":") + 1;
-      if (startIdx > 0) {
-        String data = response.substring(startIdx);
-        data.trim();
+      int firstComma = response.indexOf(',');
+      if (firstComma != -1) {
+        // Extract fix status (second field)
+        int secondComma = response.indexOf(',', firstComma + 1);
+        String fixStatus = response.substring(firstComma + 1, secondComma);
         
-        int fieldIdx = 0;
-        int lastComma = -1;
-        telem.gpsValid = false;
-        
-        for (int i = 0; i <= (int)data.length(); i++) {
-          if (i == (int)data.length() || data.charAt(i) == ',') {
-            String field = data.substring(lastComma + 1, i);
-            field.trim();
-            
-            switch(fieldIdx) {
-              case 1:  // Fix status
-                telem.gpsValid = (field.toInt() == 1);
-                break;
-              case 3:  // Latitude
-                if (field.length() > 0) telem.latitude = field.toDouble();
-                break;
-              case 4:  // Longitude
-                if (field.length() > 0) telem.longitude = field.toDouble();
-                break;
-            }
-            lastComma = i;
-            fieldIdx++;
+        if (fixStatus == "1") {
+          telem.gpsValid = true;
+          
+          // Build comma position array
+          int commaPos[20];
+          int commaCount = 0;
+          int pos = firstComma;
+          
+          while (pos != -1 && commaCount < 20) {
+            commaPos[commaCount++] = pos;
+            pos = response.indexOf(',', pos + 1);
           }
+          
+          if (commaCount >= 6) {
+            // Latitude (field 3)
+            telem.latitude = response.substring(commaPos[2] + 1, commaPos[3]).toDouble();
+            // Longitude (field 4)
+            telem.longitude = response.substring(commaPos[3] + 1, commaPos[4]).toDouble();
+          }
+        } else {
+          telem.gpsValid = false;
         }
       }
     }
